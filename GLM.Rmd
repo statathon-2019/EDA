@@ -1,0 +1,71 @@
+---
+title: "GLM"
+author: "Jiaxi Yang"
+date: "2019Äê4ÔÂ12ÈÕ"
+output: html_document
+---
+
+Part I Import Packages & Cleaned Data
+
+```{r}
+library(dplyr)
+library(ROCR)
+
+cleaned <- read.csv("cleaned.csv")
+cleaned <- cleaned[,-1]
+
+cleaned$ni.marital.status<-factor(cleaned$ni.marital.status)
+cleaned$claim.ind<-factor(cleaned$claim.ind)
+
+head(cleaned)
+
+cleanedglm<-select(cleaned,cancel,house.color,ni.age,len.at.res,credit,coverage.type,dwelling.type,premium,sales.channel,ni.gender,ni.marital.status,n.adults,n.children,tenure,claim.ind,state)
+
+Model <- glm(cancel~.^2,family = "binomial",data = cleanedglm)
+
+nothing<-glm(cancel~1,family = "binomial",data = cleanedglm)
+forwardglm<- step(nothing,scope=list(lower=formula(nothing),upper=formula(Model)), direction="forward")
+
+formula(forwardglm)
+form<-formula(forwardglm)
+
+summary(Model)
+cleanedglm$predict<-predict(Model)
+pred<-prediction(cleanedglm$predict,cleanedglm$cancel)
+
+auc.tmp <- performance(pred,"auc")
+auc <- as.numeric(auc.tmp@y.values)
+auc
+
+cancel ~ credit + sales.channel + state + n.children + ni.age + 
+    claim.ind + ni.marital.status + tenure + n.adults + len.at.res + 
+    premium + coverage.type + dwelling.type + n.children:n.adults + 
+    n.children:ni.marital.status + sales.channel:ni.age + ni.age:premium + 
+    ni.marital.status:n.adults + premium:coverage.type
+
+
+Modelnew<-glm(cancel ~ credit + sales.channel + state + n.children + ni.age + 
+    claim.ind + ni.marital.status + tenure + n.adults + len.at.res + 
+    premium + coverage.type + dwelling.type + n.children:n.adults + 
+    n.children:ni.marital.status + sales.channel:ni.age + ni.age:premium + 
+    ni.marital.status:n.adults + premium:coverage.type
+,family = "binomial",data = cleanedglm)
+summary(Modelnew)
+cleanedglm$predictnew<-predict(Modelnew)
+pred<-prediction(cleanedglm$predictnew,cleanedglm$cancel)
+
+auc.tmp <- performance(pred,"auc")
+auc <- as.numeric(auc.tmp@y.values)
+auc
+
+```
+
+Part II GLM
+
+```{r}
+Model <- glm(cancel~.^2,family = "binomial",data = cleanedglm)
+
+Model$predict
+
+```
+
