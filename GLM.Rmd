@@ -11,6 +11,7 @@ Part I Import Packages & Cleaned Data
 library(dplyr)
 library(ROCR)
 
+
 cleaned <- read.csv("cleaned.csv")
 cleaned <- cleaned[,-1]
 
@@ -21,13 +22,21 @@ head(cleaned)
 
 cleanedglm<-select(cleaned,cancel,house.color,ni.age,len.at.res,credit,coverage.type,dwelling.type,premium,sales.channel,ni.gender,ni.marital.status,n.adults,n.children,tenure,claim.ind,state)
 
-Model <- glm(cancel~.^2,family = "binomial",data = cleanedglm)
+formula<-cancel ~ credit + sales.channel + state + n.children + ni.age + 
+    claim.ind + ni.marital.status + tenure + n.adults + len.at.res + 
+    premium + coverage.type + dwelling.type + n.children:n.adults + 
+    n.children:ni.marital.status + sales.channel:ni.age + ni.age:premium + 
+    ni.marital.status:n.adults + premium:coverage.type + ni.age:tenure + 
+    tenure:n.adults + n.children:tenure + claim.ind:coverage.type + 
+    ni.age:ni.marital.status
 
-nothing<-glm(cancel~1,family = "binomial",data = cleanedglm)
-forwardglm<- step(nothing,scope=list(lower=formula(nothing),upper=formula(Model)), direction="forward")
-
-formula(forwardglm)
-form<-formula(forwardglm)
+Model <- glm(formula,family = "binomial",data = cleanedglm)
+Modelnew<-glm(formulanew,family = "binomial",data = cleanedglm)
+# nothing<-glm(cancel~1,family = "binomial",data = cleanedglm)
+# forwardglm<- step(nothing,scope=list(lower=formula(nothing),upper=formula(Model)), direction="forward")
+# 
+# formula(forwardglm)
+# form<-formula(forwardglm)
 
 summary(Model)
 cleanedglm$predict<-predict(Model)
@@ -53,7 +62,9 @@ Modelnew<-glm(cancel ~ credit + sales.channel + state + n.children + ni.age +
 summary(Modelnew)
 cleanedglm$predictnew<-predict(Modelnew)
 pred<-prediction(cleanedglm$predictnew,cleanedglm$cancel)
-
+Model$fitted.values
+pred10<-predict(Model,newdata=cleanedglm, type="response", se.fit=T) 
+pred10$se.fit
 auc.tmp <- performance(pred,"auc")
 auc <- as.numeric(auc.tmp@y.values)
 auc
@@ -63,9 +74,212 @@ auc
 Part II GLM
 
 ```{r}
-Model <- glm(cancel~.^2,family = "binomial",data = cleanedglm)
+install.packages('compare')
+library(zipcode)
+library(modelr)
+library(compare)
+zip<-data("zipcode")
 
-Model$predict
+test<-read.csv('test.csv')
+
+test_new<-merge(x = test, y = zipcode[ , c("zip","state")], by.x="zip.code" ,by.y = "zip", all.x=TRUE)
+test_new
+getwd()
+# write.csv(test_new,'test_new.csv')
+
+test_newna<-na.exclude(test_new)
+
+summary(Model)
+
+test_new$claim.ind<-factor(test_new$claim.ind)
+test_new$ni.marital.status<-factor(test_new$ni.marital.status)
+test_new$state<-factor(test_new$state)
+
+test_newna$claim.ind<-factor(test_newna$claim.ind)
+test_newna$ni.marital.status<-factor(test_newna$ni.marital.status)
+test_newna$state<-factor(test_newna$state)
+p<-predict(Model, data=test_newna)
+
+extra<-filter(test_newna,dwelling.type=='Landlord')
+formulanew<-cancel ~ credit + sales.channel + state + n.children + ni.age + 
+    claim.ind + ni.marital.status + tenure + n.adults + len.at.res + 
+    premium + coverage.type + n.children:n.adults + 
+    n.children:ni.marital.status + sales.channel:ni.age + ni.age:premium + 
+    ni.marital.status:n.adults + premium:coverage.type + ni.age:tenure + 
+    tenure:n.adults + n.children:tenure + claim.ind:coverage.type + 
+    ni.age:ni.marital.status
+
+
+test_newp<-add_predictions(test_newna, Modelnew, var = "pred")
+
+test_newp$predict<-exp(test_newp$pred)/(1+exp(test_newp$pred))
+
+result<-select(test_newp,id,predict)
+
+test_New<- left_join(test_new,result,by='id')
+
+extra<-filter(test_New, is.na(predict)==T)
+sum(is.na(extra$sales.channel))
+
+test_fill<-test_New
+
+# house color
+
+len_1<-sum(is.na(extra$house.color))
+des_1<-as.data.frame(table(cleanedglm$house.color))
+des_1$prob<-des_1$Freq/nrow(cleanedglm)
+
+x <- sample( des_1$Var1[1:dim(des_1)[1]], len_1, replace=TRUE, prob=des_1$prob )
+
+test_fill$house.color[is.na(test_fill$house.color)]<-x
+sum(is.na(test_fill$house.color))
+
+# credit
+
+len_1<-sum(is.na(extra$credit))
+des_1<-as.data.frame(table(cleanedglm$credit))
+des_1$prob<-des_1$Freq/nrow(cleanedglm)
+
+x <- sample( des_1$Var1[1:dim(des_1)[1]], len_1, replace=TRUE, prob=des_1$prob )
+
+test_fill$credit[is.na(test_fill$credit)]<-x
+sum(is.na(test_fill$credit))
+
+# coverage.type
+
+len_1<-sum(is.na(extra$coverage.type))
+des_1<-as.data.frame(table(cleanedglm$coverage.type))
+des_1$prob<-des_1$Freq/nrow(cleanedglm)
+
+x <- sample( des_1$Var1[1:dim(des_1)[1]], len_1, replace=TRUE, prob=des_1$prob )
+
+test_fill$coverage.type[is.na(test_fill$coverage.type)]<-x
+sum(is.na(test_fill$coverage.type))
+
+# sales.channel
+
+len_1<-sum(is.na(extra$sales.channel))
+des_1<-as.data.frame(table(cleanedglm$sales.channel))
+des_1$prob<-des_1$Freq/nrow(cleanedglm)
+
+x <- sample( des_1$Var1[1:dim(des_1)[1]], len_1, replace=TRUE, prob=des_1$prob )
+
+test_fill$sales.channel[is.na(test_fill$sales.channel)]<-x
+sum(is.na(test_fill$sales.channel))
+
+# ni.gender
+
+len_1<-sum(is.na(extra$ni.gender))
+des_1<-as.data.frame(table(cleanedglm$ni.gender))
+des_1$prob<-des_1$Freq/nrow(cleanedglm)
+
+x <- sample( des_1$Var1[1:dim(des_1)[1]], len_1, replace=TRUE, prob=des_1$prob )
+
+test_fill$ni.gender[is.na(test_fill$ni.gender)]<-x
+sum(is.na(test_fill$ni.gender))
+
+# ni.marital.status
+
+len_1<-sum(is.na(extra$ni.marital.status))
+des_1<-as.data.frame(table(cleanedglm$ni.marital.status))
+des_1$prob<-des_1$Freq/nrow(cleanedglm)
+
+x <- sample( des_1$Var1[1:dim(des_1)[1]], len_1, replace=TRUE, prob=des_1$prob )
+
+test_fill$ni.marital.status[is.na(test_fill$ni.marital.status)]<-x
+sum(is.na(test_fill$ni.marital.status))
+
+# claim.ind
+
+len_1<-sum(is.na(extra$claim.ind))
+des_1<-as.data.frame(table(cleanedglm$claim.ind))
+des_1$prob<-des_1$Freq/nrow(cleanedglm)
+
+x <- sample( des_1$Var1[1:dim(des_1)[1]], len_1, replace=TRUE, prob=des_1$prob )
+
+test_fill$claim.ind[is.na(test_fill$claim.ind)]<-x
+sum(is.na(test_fill$claim.ind))
+
+# state
+
+len_1<-sum(is.na(extra$state))
+des_1<-as.data.frame(table(cleanedglm$state))
+des_1$prob<-des_1$Freq/nrow(cleanedglm)
+
+x <- sample( des_1$Var1[1:dim(des_1)[1]], len_1, replace=TRUE, prob=des_1$prob )
+
+test_fill$state[is.na(test_fill$state)]<-x
+sum(is.na(test_fill$state))
+
+# ni.age
+
+x<-median(cleanedglm$ni.age)
+test_fill$ni.age[is.na(test_fill$ni.age)]<-x
+
+# len.at.res
+
+x<-median(cleanedglm$len.at.res)
+test_fill$len.at.res[is.na(test_fill$len.at.res)]<-x
+
+# premium
+
+x<-median(cleanedglm$premium)
+test_fill$premium[is.na(test_fill$premium)]<-x
+
+# n.adults
+
+x<-median(cleanedglm$n.adults)
+test_fill$n.adults[is.na(test_fill$n.adults)]<-x
+
+# n.children
+
+x<-median(cleanedglm$n.children)
+test_fill$n.children[is.na(test_fill$n.children)]<-x
+
+# tenure
+
+x<-median(cleanedglm$tenure)
+test_fill$tenure[is.na(test_fill$tenure)]<-x
+
+
+test_fill_newp<-add_predictions(test_fill, Modelnew, var = "pred")
+test_fill_newp$predict<-exp(test_fill_newp$pred)/(1+exp(test_fill_newp$pred))
+
+sum(is.na(test_fill$ni.age))
+sum(is.na(test_fill_newp$predict))
+
+write.csv(test_fill,'test_fill.csv')
+
+result_fill<-select(test_fill_newp,id,predict)
+
+write.csv(result_fill,'result_fill.csv')
+
+order(test$id)==order(result_fill$id)
+
+test$id[1]
+identical(test[order(test$id),]$id,result_fill[order(result_fill$id),]$id)
+
+
+identical(order(test$id),order(result_fill$id))
+length(test$id)==length(result_fill$id)
+
+identical(test$id,result_fill$id)
+sum(is.na(result_fill$predict))
+
+range(result_fill$predict)
+str(order(test$id))
+str(order(result_fill$id))
+
+hist(result$predict)
+dif<-compare(test_new,test_newna)$tM
+
+hist(fitted(Modelnew))
+hist(result$predict)
+
+
+test_newna$predict<-p
+aa<-as.data.frame(p)
+p
 
 ```
 
